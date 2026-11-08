@@ -2,9 +2,9 @@ local RAINBOW_MATERIAL_TAG = "rainbow outline"
 local RAINBOW_MATERIAL_EXCLUDE_TAG = "processed rainbow outline"
 local RAINBOW_SHADER_NAME = "Rainbow_Outline"
 local MATERIAL_ID_OFFSET = 12345 -- only change if you know that its right or your game will have a giant lag spike
+local MATERIAL_ID_RETRIES = 1000
 local RAINBOW_EVERYTHING = false
 local RAINBOW_MATERIAL_TRACKER_PARENT = game.World
-local SKIP_ON_ERROR = false
 
 local nextMaterialId = MATERIAL_ID_OFFSET + 1
 
@@ -14,6 +14,7 @@ if not RAINBOW_EVERYTHING then
 end
 
 local rainbowTracker = Instance.new()
+local idRetries = 0
 rainbowTracker.Name = "RainbowTracker"
 rainbowTracker.Parent = assert(RAINBOW_MATERIAL_TRACKER_PARENT)
 
@@ -23,32 +24,38 @@ game.World.System("RainbowApplier", allRainbowMaterials, function(query: Query, 
 		local ok, material = pcall(game.Materials.GetMaterial, materialComponent.Material)
 		if not ok or not material then
 		    warn(`RainbowApplier: Material for Instance {query.Instance[i].Name} returned "{material}" instead of a valid material name`)
-			if SKIP_ON_ERROR then
-				query.Entity[i]:AddComponent(game.World.Pair("Tag", RAINBOW_MATERIAL_EXCLUDE_TAG))
-			end
-
+			query.Entity[i]:AddComponent(game.World.Pair("Tag", RAINBOW_MATERIAL_EXCLUDE_TAG))
 			continue
 		end
 
 		if material.Shader ~= RAINBOW_SHADER_NAME then
+		    local err
 
 		    material.Shader = RAINBOW_SHADER_NAME
 
 			while ok do
 				nextMaterialId += 1
-				ok, _ = pcall(game.Materials.GetMaterial, `{nextMaterialId}`)
+				ok, err = pcall(game.Materials.GetMaterial, `{nextMaterialId}`)
+				idRetries += 1
+				if idRetries > MATERIAL_ID_RETRIES then
+					warn(`RainbowApplier: Failed to find a free material ID after {MATERIAL_ID_RETRIES} retries ({err})`)
+					break
+				end
+			end
+			if not ok then
+				warn(`RainbowApplier: Failed to define material {nextMaterialId} ({err})`)
+				query.Entity[i]:AddComponent(game.World.Pair("Tag", RAINBOW_MATERIAL_EXCLUDE_TAG))
+				continue
 			end
 
+			idRetries = 0
 			material.Name += `_RAINBOW_{nextMaterialId}` -- just in case it isn't unique
 			material.Id = `{nextMaterialId}`
 			ok, material = pcall(game.Materials.DefineMaterial, material)
 
 			if not ok then
-				warn(`RainbowApplier: {material}`)
-				if SKIP_ON_ERROR then
-					query.Entity[i]:AddComponent(game.World.Pair("Tag", RAINBOW_MATERIAL_EXCLUDE_TAG))
-				end
-
+				warn(`RainbowApplier: Failed to define material {nextMaterialId} ({err})`)
+				query.Entity[i]:AddComponent(game.World.Pair("Tag", RAINBOW_MATERIAL_EXCLUDE_TAG))
 				continue
 			end
 
