@@ -4,7 +4,7 @@ local aliases = {}
 
 plugin:Operator({
     Id = "character.register.json",
-    Label = "Raise",
+    Label = "Register",
     Params = {
         {
             Name = "json",
@@ -16,11 +16,13 @@ plugin:Operator({
             Default = "",
         },
     },
-    Icon = "bruh.svg",
+    Icon = "Assets/Icons/bruh.svg",
+    Prefab = "Assets/Prefabs/Register.ldv",
     Execute = function(ctx, params)
-
+    	print(params.json)
         local ok, manifest = pcall(json.deserialize, params.json)
         if not ok then return false, `[Character.Register.Json]: Failed to deserialize JSON: {manifest}` end
+        if not manifest.user_id then return false, `[Character.Register.Json]: JSON Missing Required Field: user_id` end
 
         local alias = if params.alias ~= "" then params.alias else manifest.user_id
         if aliases[alias] then return false, `[Character.Register.Json]: "{alias}" has already been registered` end
@@ -48,7 +50,8 @@ plugin:Operator({
             From = "Selection",
         }
     },
-    Icon = "stickFigure.svg",
+    Icon = "Assets/Icons/stickFigure.svg",
+    Prefab = "Assets/Prefabs/Spawn.ldv",
     Execute = function(ctx, params)
         local id = aliases[params.alias]
         if not id then return false,
@@ -67,3 +70,5 @@ plugin:Operator({
         return true
     end
 })
+
+plugin:Ribbon({Group = "Character", Items = {"character.register.json", "character.spawn"}})
