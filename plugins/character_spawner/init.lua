@@ -1,10 +1,5 @@
-local json = require("./Character Spawner/json")
-local spawn = require("./Character Spawner/characterSpawner")
-game.Physics.Raycast(origin, dir, maxDist, )
-
-local t: QueryParams = {
-
-}
+local json = require("./json")
+local spawn = require("./characterSpawner")
 local aliases = {}
 
 plugin:Operator({
@@ -21,6 +16,7 @@ plugin:Operator({
             Default = "",
         },
     },
+    Icon = "bruh.svg",
     Execute = function(ctx, params)
 
         local ok, manifest = pcall(json.deserialize, params.json)
@@ -52,6 +48,7 @@ plugin:Operator({
             From = "Selection",
         }
     },
+    Icon = "stickFigure.svg",
     Execute = function(ctx, params)
         local id = aliases[params.alias]
         if not id then return false,
@@ -62,7 +59,8 @@ plugin:Operator({
 
         if not params.targets then params.targets = ctx.Edit:Create("Character") end
 
-        for _, target in params.targets do
+        for _, target: Instance in params.targets do
+        	if not target:HasComponent("Character") then warn(`[Character.Spawn]: "{target.Name} is not a character! Skipping..."`) ; continue end
             spawn.Apply(id, target)
         end
 
