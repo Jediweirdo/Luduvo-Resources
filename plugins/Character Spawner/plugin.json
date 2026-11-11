@@ -1,0 +1,9 @@
+{
+	"id": "character_spawner",
+	"version": "0.0.1",
+	"name": "Character Spawner",
+	"tagline": "A plugin that spawns characters for you... well kinda.",
+	"maintainer": "Jediweirdo",
+	"license": "MIT",
+	"studio_version_min": 51
+}

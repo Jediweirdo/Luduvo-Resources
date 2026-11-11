@@ -1,0 +1,9 @@
+{
+	"id": "jedi_resources",
+	"version": "0.0.1",
+	"name": "Jedi's Luduvo Resources",
+	"tagline": "A collection of stuff that you may or may not find useful",
+	"maintainer": "Luduvo",
+	"license": "MIT",
+	"studio_version_min": 51
+}
