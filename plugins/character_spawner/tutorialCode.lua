@@ -7,7 +7,6 @@ local source = [=[
 
 local data = require("../CharacterData") --  Put all the avatar data here if you are using the exporter
 local presets = { Tag = __TUTORIAL_TAG__, AliasAttribute = __TUTORIAL_ALIAS_ATTRIBUTE__ }
-local Dresser = {}
 local watched = {}
 
 local FETCH_IN_FLIGHT_MAX = 16
@@ -182,10 +181,6 @@ local function apply(character, alias, fullAppearance, tag)
     return true
 end
 
-function Dresser.Apply(character, alias, fullAppearance)
-    return apply(character, alias, fullAppearance, nil)
-end
-
 local function reconcileTagged(current, tag)
     for character, alias in current do
         local state = records[character]
@@ -211,35 +206,31 @@ local function reconcileTagged(current, tag)
     pumpFetches()
 end
 
-function Dresser.Activate()
-    local tag = game.World.Pair("Tag", presets.Tag)
-    local query = game.World:Query("Character", tag):Without("CharacterDead")
-    game.World:System("Dresser", query, function(q)
-        local current = {}
-        local changed = false
-        for i = 1, q.count do
-            local character = q.Instance[i]
-            if not character then continue end
-            local alias = character.attr[presets.AliasAttribute]
-            if type(alias) == "string" and alias ~= "" then
-                current[character] = alias
-                local record = records[character]
-                if watched[character] ~= alias or (record and record.interrupted) then
-                    changed = true
-                end
+local tag = game.World.Pair("Tag", presets.Tag)
+local query = game.World:Query("Character", tag):Without("CharacterDead")
+game.World:System("Dresser", query, function(q)
+    local current = {}
+    local changed = false
+    for i = 1, q.count do
+        local character = q.Instance[i]
+        if not character then continue end
+        local alias = character.attr[presets.AliasAttribute]
+        if type(alias) == "string" and alias ~= "" then
+            current[character] = alias
+            local record = records[character]
+            if watched[character] ~= alias or (record and record.interrupted) then
+                changed = true
             end
         end
-        for character in watched do
-            if not current[character] then changed = true end
-        end
-        for character in records do
-            if not character:IsAlive() or character:HasComponent("CharacterDead") then changed = true end
-        end
-        if changed then task.defer(reconcileTagged, current, tag) end
-    end)
-end
-
-Dresser.Activate()
+    end
+    for character in watched do
+        if not current[character] then changed = true end
+    end
+    for character in records do
+        if not character:IsAlive() or character:HasComponent("CharacterDead") then changed = true end
+    end
+    if changed then task.defer(reconcileTagged, current, tag) end
+end)
 ]=]
 
 source = source:gsub("__TUTORIAL_TAG__", function()
