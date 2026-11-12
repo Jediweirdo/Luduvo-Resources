@@ -1,0 +1,9 @@
+{
+	"id": "instance_serializer",
+	"version": "0.0.1",
+	"name": "Instance Serializer",
+	"tagline": "Prefab Creator, but for plugins",
+	"maintainer": "Jediweirdo",
+	"license": "MIT",
+	"studio_version_min": 51
+}

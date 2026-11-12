@@ -1,9 +1,9 @@
 -- This is basically just Luduvo's Avatar spawner but generalized to work without needing a player
 -- This REQUIRES you to register characters in Studio via the plugin first!!!
 
-local data = require("./AvatarData") --  Put all the avatar data here if you are using the exporter
+local data = require("./CharacterData")
+local presets = require("./AvatarDressPresets")
 local Dresser = {}
-local TAG = "Dress Up" -- This tag will activate the dresser to dress your character
 local watched = {}
 
 local FETCH_IN_FLIGHT_MAX = 16
@@ -43,7 +43,7 @@ local function isCurrent(record)
 		or character:HasComponent("CharacterDead") then
 		return false
 	end
-	if record.tag and (not character:HasComponent(record.tag) or character.attr.AvatarAlias ~= record.alias) then
+	if record.tag and (not character:HasComponent(record.tag) or character.attr[presets.AliasAttribute] ~= record.alias) then
 		record.interrupted = true
 		return false
 	end
@@ -185,7 +185,7 @@ end
 local function reconcileTagged(current, tag)
 	for character, alias in current do
 		local state = records[character]
-		if not character:IsAlive() or not character:HasComponent(tag) or character.attr.AvatarAlias ~= alias then
+		if not character:IsAlive() or not character:HasComponent(tag) or character.attr[presets.AliasAttribute] ~= alias then
 			current[character] = nil
 		elseif watched[character] ~= alias or (state and state.interrupted) then
 			local ok, reason = apply(character, alias, false, tag)
@@ -208,7 +208,7 @@ local function reconcileTagged(current, tag)
 end
 
 function Dresser.Activate()
-	local tag = game.World.Pair("Tag", TAG)
+	local tag = game.World.Pair("Tag", presets.Tag)
 	local query = game.World:Query("Character", tag):Without("CharacterDead")
 	game.World:System("Dresser", query, function(q)
 		local current = {}
@@ -216,7 +216,7 @@ function Dresser.Activate()
 		for i = 1, q.count do
 			local character = q.Instance[i]
 			if not character then continue end
-			local alias = character.attr.AvatarAlias
+			local alias = character.attr[presets.AliasAttribute]
 			if type(alias) == "string" and alias ~= "" then
 				current[character] = alias
 				local record = records[character]
@@ -235,4 +235,7 @@ function Dresser.Activate()
 	end)
 end
 
+function Dresser.GetPresets()
+	return table.clone(presets)
+end
 return Dresser

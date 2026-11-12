@@ -1,60 +1,44 @@
 local spawn = require("./characterSpawner")
-
-local function sortKeys(dictionary)
-	local keys = {}
-	for key in dictionary do
-		table.insert(keys, key)
-	end
-	table.sort(keys)
-	return keys
-end
+local serpent = require("./serpent")
 
 return function(aliases)
-	local lines = { "-- Save as scripts/AvatarData.lua", "return {", "\tAliases = {" }
-	local assets = {}
+	local data = { Aliases = {}, Assets = {} }
 
-	for _, alias in sortKeys(aliases) do
-		local manifest = aliases[alias].manifest
-		local appearance = spawn.GetAppearance(manifest)
-
-		table.insert(lines, string.format("\t\t[%q] = {", alias))
-		table.insert(lines, "\t\t\tAppearance = {")
-
-		for _, property in sortKeys(appearance) do
-			table.insert(lines, string.format("\t\t\t\t%s = %q,", property, appearance[property]))
-		end
-
-		table.insert(lines, "\t\t\t},")
-		table.insert(lines, "\t\t\tAccessories = {")
-
+	for alias, record in pairs(aliases) do
+		local manifest = record.manifest
+		local accessories = {}
 		local seen = {}
-		for _, row in manifest.Accessories do
-			local asset, hash = row.Asset, string.lower(row.Sha256)
 
-			if assets[asset] and assets[asset] ~= hash then
-				return nil, `[Character.Export]: Conflicting SHA-256 hashes for asset {asset}`
+		for _, row in ipairs(manifest.Accessories) do
+			local asset, hash = row.Asset, string.lower(row.Sha256)
+			local existingHash = data.Assets[asset]
+			if existingHash and existingHash ~= hash then
+				return nil, string.format("[Character.Export]: Conflicting SHA-256 hashes for asset %s", asset)
 			end
-			assets[asset] = hash
+			data.Assets[asset] = hash
 
 			if not seen[asset] then
 				seen[asset] = true
-				table.insert(lines, string.format("\t\t\t\t%q,", asset))
+				table.insert(accessories, asset)
 			end
 		end
 
-		table.insert(lines, "\t\t\t},")
-		table.insert(lines, "\t\t},")
+		data.Aliases[alias] = {
+			Appearance = spawn.GetAppearance(manifest),
+			Accessories = accessories,
+		}
 	end
 
-	table.insert(lines, "\t},")
-	table.insert(lines, "\tAssets = {")
-
-	for _, asset in sortKeys(assets) do
-		table.insert(lines, string.format("\t\t[%q] = %q,", asset, assets[asset]))
+	local ok, source = pcall(serpent.block, data, {
+		comment = false,
+		fatal = true,
+		indent = "    ",
+		sortkeys = function(keys)
+			table.sort(keys)
+		end,
+	})
+	if not ok then
+		return nil, "[Character.Export]: " .. tostring(source)
 	end
-
-	table.insert(lines, "\t},")
-	table.insert(lines, "}")
-
-	return table.concat(lines, "\n")
+	return "-- Save as scripts/CharacterData.lua\nreturn " .. source
 end
