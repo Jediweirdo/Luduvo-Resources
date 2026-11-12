@@ -40,5 +40,5 @@ return function(aliases)
 	if not ok then
 		return nil, "[Character.Export]: " .. tostring(source)
 	end
-	return "-- Save as scripts/CharacterData.lua\nreturn " .. source
+	return "-- Save as scripts/CharacterData.server.lua\nreturn " .. source
 end

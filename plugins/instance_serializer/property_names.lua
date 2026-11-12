@@ -6,17 +6,17 @@
 -- Updated from the Luduvo LSP API dump for installed content 14.
 
 local unmappedField = table.freeze({
-    warn = false,
+    warn = true,
     reason = "No flat writable property mapping is known for this component field.",
 })
 
 local readOnlyField = table.freeze({
-    warn = false,
+    warn = true,
     reason = "This component field is read-only.",
 })
 
 local unmappedComponent = table.freeze({
-    warn = false,
+    warn = true,
     reason = "No flat writable property mapping is known for this component.",
 })
 
@@ -24,7 +24,6 @@ return {
     propertyNames = {
         -- Component-qualified names take precedence over bare field names.
         ["Background.BackgroundColor"] = "BackgroundColor",
-        ["BillboardGui.adornee"] = "Adornee",
         ["CharacterAppearance.HeadColor"] = "BodyColorHead",
         ["CharacterAppearance.LeftArmColor"] = "BodyColorLeftArm",
         ["CharacterAppearance.LeftLegColor"] = "BodyColorLeftLeg",
@@ -39,6 +38,7 @@ return {
         ["PartOperation.CollisionFidelity"] = "CollisionFidelity",
         ["PartOperation.UsePartColor"] = "UsePartColor",
         ["UIFrame.BackgroundColor"] = "BackgroundColor3",
+        ["UITransform.Scale"] = "Scale",
 
         Action = "Action",
         Active = "Active",
@@ -687,31 +687,69 @@ return {
         Visible = false,
     },
 
+    -- These properties can be set, but the destination must have the referenced assets.
+    assetDependencies = {
+        Mesh = true,
+        Sound = true,
+        SurfaceAppearance = true,
+        SurfaceMaterial = true,
+        UIImage = true,
+        UIImageStates = true,
+    },
+
+    -- Some setters require a component that the matching constructor supplies.
+    createClasses = {
+        BillboardGui = "BillboardGui",
+        InputAction = "InputAction",
+        InputBinding = "InputBinding",
+        InputContext = "InputContext",
+        LeaderboardColumn = "LeaderboardColumn",
+        Pivot = "Model",
+        Tool = "Tool",
+    },
+
+    -- The Tool constructor also creates the rest of a physical tool.
+    constructorRequirements = {
+        Tool = {
+            "Position", "Scale", "Rotation", "Shape", "Collider", "RigidBody",
+            "AssemblyModel", "BrickColor", "SurfaceMaterial", "ToolState",
+        },
+    },
+
     -- Check component names for dependencies and field names for unmapped fields.
     unmappedComponentFields = {
         ["AssemblyMass.Center"] = readOnlyField,
         ["AssemblyMass.Mass"] = readOnlyField,
+        ["BillboardGui.adornee"] = {
+            warn = true,
+            reason = "The flat Adornee setter writes AdornmentHandles instead.",
+        },
         ["FloorInfo.Friction"] = readOnlyField,
         ["FloorInfo.Normal"] = readOnlyField,
         ["FloorInfo.Part"] = readOnlyField,
+        ["HumanoidState.AirJumps"] = readOnlyField,
+        ["HumanoidState.State"] = readOnlyField,
         ["Identity.RttMs"] = readOnlyField,
+        ["Sound.Playing"] = readOnlyField,
         ["NavigationSettings.CellSize"] = unmappedField,
         ["NavigationSettings.TileSize"] = unmappedField,
         ["PartOperation.Type"] = readOnlyField,
         ["ParticleColorRamp.Color"] = unmappedField,
+        ["ParticleEmitter.Color"] = unmappedField,
         ["ParticleEmitter.Size"] = unmappedField,
         ["ParticleRotation.Angle"] = unmappedField,
+        ["ParticleShapeBox.Offset"] = unmappedField,
+        ["ParticleShapeBox.Size"] = unmappedField,
+        ["ParticleShapeCylinder.Offset"] = unmappedField,
+        ["ParticleShapeSphere.Offset"] = unmappedField,
         ["ParticleSprite.Emissive"] = unmappedField,
+        ["ParticleVelocityCone.Angle"] = unmappedField,
         ["ParticleVortex.Axis"] = unmappedField,
         ["SeatInput.Right"] = readOnlyField,
+        ["UITransform.Rotation"] = unmappedField,
         BackgroundColor = { warn = true, reason = "BackgroundColor requires a known source component." },
 
-        Mesh = { warn = true, reason = "The mesh asset must resolve in the destination." },
         PrefabInstance = { warn = true, reason = "Create makes an editable snapshot without the prefab link." },
-        Sound = { warn = true, reason = "The sound asset must resolve in the destination." },
-        SurfaceMaterial = { warn = true, reason = "The destination needs the material definition and its dependencies." },
-        UIImage = { warn = true, reason = "The image asset must resolve in the destination." },
-        UIImageStates = { warn = true, reason = "Hover, pressed, and disabled image assets must resolve in the destination." },
 
         AgentHeight = unmappedField,
         AgentMaxClimb = unmappedField,

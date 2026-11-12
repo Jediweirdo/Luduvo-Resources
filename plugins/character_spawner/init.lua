@@ -314,6 +314,9 @@ local function spawnCharacter(ctx)
 		Side = "Front",
 		Texture = "0",
 	}, Head2)
+	warn(
+		"[Character.Spawn]: Manually add Character to the rig root in Studio and Kinematic to the head, arms, and legs in a server script. The server dresser can add both automatically for a tagged rig."
+	)
 	return Character1
 end
 
@@ -397,7 +400,7 @@ local function spawnTutorial(ctx, alias)
 		Size = UDim2.new(1, 0, 0, 24),
 		SizeModeX = "Fixed",
 		SizeModeY = "Fit",
-		Text = `First, go to your character(s) and add a "{presets.Tag}" tag and a string "{presets.AliasAttribute}" attribute set to {aliasText}. If the rig root is missing the Character component, add that too. I would have done this mysef, but y'know, limitations.`,
+		Text = `First, go to your character(s) and add a "{presets.Tag}" tag and a string "{presets.AliasAttribute}" attribute set to {aliasText}. The server dresser adds the Character and Kinematic components that plugins cannot set in Studio.`,
 		TextColor3 = Vector3.new(0.7843137383460999, 0.800000011920929, 0.8235294222831726),
 		TextSize = 16,
 		TextStrokeColor3 = Vector3.new(0, 0, 0),
@@ -705,7 +708,7 @@ local function spawnTutorial(ctx, alias)
 		Size = UDim2.new(1, 0, 0, 24),
 		SizeModeX = "Fixed",
 		SizeModeY = "Fit",
-		Text = 'Save the exported registry as "scripts/CharacterData.lua" (case sensitive). The autorun script above loads it from there.',
+		Text = 'Save the exported registry as "scripts/CharacterData.server.lua" (case sensitive). The autorun script above loads it from there.',
 		TextColor3 = Vector3.new(0.7843137383460999, 0.800000011920929, 0.8235294222831726),
 		TextSize = 16,
 		TextStrokeColor3 = Vector3.new(0, 0, 0),
@@ -810,7 +813,7 @@ local function spawnExport(ctx, code)
 		Size = UDim2.new(1, 0, 0, 24),
 		SizeModeX = "Fixed",
 		SizeModeY = "Fit",
-		Text = "Copy the text below and save it as scripts/CharacterData.lua.",
+		Text = "Copy the text below and save it as scripts/CharacterData.server.lua.",
 		TextColor3 = Vector3.new(0.7843137383460999, 0.800000011920929, 0.8235294222831726),
 		TextSize = 16,
 		TextStrokeColor3 = Vector3.new(0, 0, 0),
@@ -1011,7 +1014,10 @@ plugin:Operator({
 				`[Character.Spawn]: "{params.alias}" hasn't been registered. Set it up with character.register.json first`
 		end
 
-		local targets = if #ctx.Selection == 0 then { spawnCharacter(ctx) } else ctx.Selection
+		local targets = ctx.Selection
+		if #targets == 0 then
+			targets = { spawnCharacter(ctx) }
+		end
 
 		for _, target: Instance in targets do
 			-- The editor-built rig has CharacterRig and BodyPart without the Character tag.

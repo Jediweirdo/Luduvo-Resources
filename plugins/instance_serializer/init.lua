@@ -1,43 +1,56 @@
 local printify = require("./serpent")
 local propertyDB = require("./property_names")
 
-function normalizeField(componentName, field)
+local function normalizeField(componentName, field)
 	local qualifiedName = componentName .. "." .. field
 	local newField = propertyDB.propertyNames[qualifiedName] or propertyDB.propertyNames[field]
 	local skipCheck = propertyDB.unmappedComponentFields[qualifiedName]
 		or (not newField and propertyDB.unmappedComponentFields[field])
 	if skipCheck then
-		if skipCheck.warn then
-			warn(`[Instance.Serialize]: Unable to serialize field from "{componentName}": {skipCheck.reason}`)
-		end
-		return
+		return nil, if skipCheck.warn then skipCheck.reason else nil
 	end
-
 	if not newField then
-		return warn(
-			`[Instance.Serialize]: Unable to serialize field from "{componentName}": {field} isn't a dumped field`
-		)
+		return nil, "No flat property mapping."
 	end
-
 	return newField
 end
 
-function normalizeName(instance: Instance?, descendants: { Instance })
-	if not instance then
-		return
+local function collectInstances(targets)
+	local selected = {}
+	local candidates = {}
+	for _, target in targets do
+		if not selected[target] then
+			selected[target] = true
+			table.insert(candidates, target)
+		end
+		for _, descendant in target:GetDescendants() do
+			if not selected[descendant] then
+				selected[descendant] = true
+				table.insert(candidates, descendant)
+			end
+		end
 	end
 
-	local name = instance.Name or "Unknown"
-
-	local cleaned = name:gsub("[^A-Za-z0-9_]", "_")
-	local index = table.find(descendants, instance)
-	if not index then
-		return warn(
-			`[Instance.Serialize]: {instance.Name or "An unnamed instance"} is not apart of the selected exports!`
-		)
+	local ordered = {}
+	local names = {}
+	for _, candidate in candidates do
+		local ancestors = {}
+		local current = candidate
+		while current and selected[current] and not names[current] do
+			table.insert(ancestors, current)
+			current = current.Parent
+		end
+		for i = #ancestors, 1, -1 do
+			local instance = ancestors[i]
+			local name = (instance.Name or "Instance"):gsub("[^A-Za-z0-9_]", "_")
+			if name == "" or name:match("^%d") then
+				name = "_" .. name
+			end
+			table.insert(ordered, instance)
+			names[instance] = name .. "_" .. #ordered
+		end
 	end
-
-	return cleaned .. index
+	return ordered, names
 end
 
 function spawnOutputUi(ctx: PluginContext, output: string)
@@ -286,6 +299,7 @@ function spawnOutputUi(ctx: PluginContext, output: string)
 		ZIndex = 32001,
 	}, Field8)
 end
+
 plugin:Operator({
 	Id = "instance.serialize",
 	Label = "Export",
@@ -308,95 +322,143 @@ plugin:Operator({
 		end
 
 		local output = {}
-		for _, target: Instance in params.targets do
-			local descendants = target:GetDescendants()
-			table.insert(descendants, 1, target)
+		local references = {}
+		local descendants, names = collectInstances(params.targets)
+		for _, descendant in descendants do
+			local variable = names[descendant]
+			local class = "Folder"
+			local components = { Name = descendant.Name }
+			local constructors = {}
+			local omitted = {}
+			local dependencies = {}
 
-			for i, descendant in descendants do
-				local components = {}
-				local constructors = {}
-
-				for _, name in descendant:GetComponents() do
-					local ok, view: Component | string = pcall(function()
-						return descendant:Component(name)
-					end)
-
-					if not ok and not view:find("has no fields") then
-						warn(`[Instance.Serialize]: Unable to serialize component "{name}": {view or "¯\\_(ツ)_/¯"}`)
-						continue
-					end
-
-					if typeof(view) == "string" then -- component tags are components with their name as a field
-						local tagName = normalizeField(name, name)
-						if not tagName then
-							continue
-						end
-
-						local tagValue = propertyDB.presenceProperties[tagName]
-
-						if tagName == nil or tagValue == nil then
-							warn(
-								`[Instance.Serialize]: Unable to serialize tag component "{name}": Unable to find map property {tagName} to a value`
-							)
-						else
-							components[tagName] = tagValue
-						end
-
-						continue
-					end
-
-					for field, value in view do
-						field = normalizeField(name, field)
-						if not field then
-							continue
-						end
-
-						local valueType = typeof(value)
-						local constructor
-
-						if valueType == "Vector3" then -- this tripped me up for so long...
-							constructor = `Vector3.new({value.x}, {value.y}, {value.z})`
-						elseif valueType == "UDim" then
-							constructor = `UDim.new({value.Scale}, {value.Offset})`
-						elseif valueType == "UDim2" then
-							constructor =
-								`UDim2.new({value.X.Scale}, {value.X.Offset}, {value.Y.Scale}, {value.Y.Offset})`
-						elseif valueType == "NumberRange" then
-							constructor = `NumberRange.new({value.Min}, {value.Max})`
-						elseif valueType == "Rect" then
-							constructor = `Rect.new({value.Min.x}, {value.Min.y}, {value.Max.x}, {value.Max.y})`
-						end
-
-						constructors[field] = constructor
-						components[field] = if constructor then "__constructor__" else value
+			local componentNames = descendant:GetComponents()
+			for _, name in componentNames do
+				local candidate = propertyDB.createClasses[name]
+				if not candidate then
+					continue
+				end
+				local matches = true
+				for _, required in propertyDB.constructorRequirements[candidate] or {} do
+					if not table.find(componentNames, required) then
+						matches = false
+						break
 					end
 				end
+				if matches then
+					class = candidate
+				elseif name == "Tool" then
+					table.insert(omitted, "Tool (the Tool constructor would add components absent from the source)")
+				end
+			end
 
-				if not next(components) then
-					return false,
-						`[Instance.Serialize]: Unable to serialize components of "{descendant.Name .. i}": There are none`
+			for _, name in componentNames do
+				if name == "Character" or name == "Kinematic" then
+					table.insert(omitted, `{name} (server runtime: {variable}:AddComponent("{name}"))`)
+					continue
 				end
 
-				local ok: boolean, source: string =
-					pcall(printify.block, components, { comment = false, sortkeys = true })
-				if not ok then
-					return false,
-						`[Instance.Serialize]: Unable to serialize components of "{descendant.Name .. i}": {source}`
-				end
-
-				source = source:gsub('(\n +([%a_][%w_]*) = )"__constructor__"', function(prefix, field)
-					local constructor = constructors[field]
-					return constructor and prefix .. constructor
+				local ok, view = pcall(function()
+					return descendant:Component(name)
 				end)
 
-				local parent = normalizeName(descendant.Parent, descendants)
-				table.insert(
-					output,
-					`local {normalizeName(descendant, descendants)} = ctx.Edit:Create({"\n"}"Folder", {"\n"}{source} {(if parent
-						then ",\n" .. parent
-						else "")})`
-				)
+				if not ok or not view then
+					if not ok and tostring(view):find("has no fields", 1, true) then
+						local tagName, reason = normalizeField(name, name)
+						local tagValue = if tagName then propertyDB.presenceProperties[tagName] else nil
+						if tagValue ~= nil then
+							components[tagName] = tagValue
+						elseif table.find(propertyDB.constructorRequirements[class] or {}, name) then
+							continue
+						elseif tagName or reason then
+							table.insert(omitted, `{name} ({reason or "no mapped presence value"})`)
+						end
+					elseif name ~= "ScriptHandles" then
+						table.insert(omitted, `{name} (component data unavailable)`)
+					end
+					continue
+				end
+
+				for componentField, value in view do
+					if value == nil then
+						continue
+					end
+					local field, reason = normalizeField(name, componentField)
+					if not field then
+						if reason then
+							table.insert(omitted, `{name}.{componentField} ({reason})`)
+						end
+						continue
+					end
+
+					if typeof(value) == "Instance" then
+						local target = names[value]
+						if target then
+							table.insert(references, `ctx.Edit:Set({variable}, "{field}", {target})`)
+						else
+							table.insert(omitted, `{name}.{componentField} (references an instance outside the export)`)
+						end
+						continue
+					end
+
+					if propertyDB.assetDependencies[name] and type(value) == "string" and value ~= "" and value ~= "0" then
+						dependencies[name] = true
+					end
+					local valueType = typeof(value)
+					local constructor
+
+					if valueType == "vector" or valueType == "Vector3" then
+						constructor = `Vector3.new({value.x}, {value.y}, {value.z})`
+					elseif valueType == "UDim" then
+						constructor = `UDim.new({value.Scale}, {value.Offset})`
+					elseif valueType == "UDim2" then
+						constructor =
+							`UDim2.new({value.X.Scale}, {value.X.Offset}, {value.Y.Scale}, {value.Y.Offset})`
+					elseif valueType == "NumberRange" then
+						constructor = `NumberRange.new({value.Min}, {value.Max})`
+					elseif valueType == "Rect" then
+						constructor = `Rect.new({value.Min.x}, {value.Min.y}, {value.Max.x}, {value.Max.y})`
+					end
+
+					if not constructor and valueType ~= "string" and valueType ~= "number"
+						and valueType ~= "boolean" and valueType ~= "table"
+					then
+						table.insert(omitted, `{name}.{componentField} (unsupported value type {valueType})`)
+						continue
+					end
+					constructors[field] = constructor
+					components[field] = if constructor then "__constructor__" else value
+				end
 			end
+
+			local ok, source = pcall(printify.block, components, { comment = false, sortkeys = true })
+			if not ok then
+				return false, `[Instance.Serialize]: Unable to serialize components of "{descendant.Name}": {source}`
+			end
+
+			source = source:gsub('(\n +([%a_][%w_]*) = )"__constructor__"', function(prefix, field)
+				local constructor = constructors[field]
+				return constructor and prefix .. constructor
+			end)
+
+			local parent = names[descendant.Parent]
+			table.insert(output, `local {variable} = ctx.Edit:Create({"\n"}"{class}", {"\n"}{source}{if parent then ",\n" .. parent else ""})`)
+			table.sort(omitted)
+			for _, missing in omitted do
+				table.insert(output, "-- Omitted " .. missing:gsub("[\r\n]", " "))
+			end
+
+			local assetComponents = {}
+			for name in dependencies do
+				table.insert(assetComponents, name)
+			end
+			if #assetComponents > 0 then
+				table.sort(assetComponents)
+				table.insert(output, "-- Referenced assets must exist in the destination for " .. table.concat(assetComponents, ", ") .. ".")
+			end
+		end
+		if #references > 0 then
+			table.insert(output, table.concat(references, "\n"))
 		end
 
 		if params.output == "console" then
@@ -407,4 +469,5 @@ plugin:Operator({
 		return true
 	end,
 })
+
 plugin:Ribbon({ Group = "Instance Serializer", Items = { "instance.serialize" } })

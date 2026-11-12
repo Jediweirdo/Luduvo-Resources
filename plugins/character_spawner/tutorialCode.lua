@@ -5,7 +5,7 @@ local source = [=[
 -- This is basically just Luduvo's Avatar spawner but generalized to work without needing a player
 -- This REQUIRES you to register characters in Studio via the plugin first!!!
 
-local data = require("../CharacterData") --  Put all the avatar data here if you are using the exporter
+local data = require("../CharacterData.server") --  Put all the avatar data here if you are using the exporter
 local presets = { Tag = __TUTORIAL_TAG__, AliasAttribute = __TUTORIAL_ALIAS_ATTRIBUTE__ }
 local watched = {}
 
@@ -126,13 +126,37 @@ function pumpFetches()
     end
 end
 
+local function prepareRig(character)
+    local needsCharacter = not character:HasComponent("Character")
+    if needsCharacter and not (character:HasComponent("CharacterRig") and character:HasComponent("BodyPart")) then
+        return false
+    end
+
+    if character:HasComponent("CharacterRig") then
+        for _, limb in character:GetChildren() do
+            if limb:HasComponent("BodyPart") and not limb:HasComponent("Kinematic") then
+                limb:AddComponent("Kinematic")
+            end
+        end
+    end
+
+    if needsCharacter then
+        character:AddComponent("Character")
+    end
+    return true
+end
+
 local function apply(character, alias, fullAppearance, tag)
-    if not character:IsAlive() or not character:HasComponent("Character") or character:HasComponent("CharacterDead") then
+    if not character:IsAlive() or character:HasComponent("CharacterDead") then
         return false, "Expected a live character"
     end
     local avatar = data.Aliases[alias]
     if not avatar then
         return false, `Unknown avatar alias "{alias}"`
+    end
+
+    if not prepareRig(character) then
+        return false, "Expected a character or a character rig"
     end
 
     local wanted = {}
@@ -207,7 +231,7 @@ local function reconcileTagged(current, tag)
 end
 
 local tag = game.World.Pair("Tag", presets.Tag)
-local query = game.World:Query("Character", tag):Without("CharacterDead")
+local query = game.World:Query(tag):Without("CharacterDead")
 game.World:System("Dresser", query, function(q)
     local current = {}
     local changed = false
