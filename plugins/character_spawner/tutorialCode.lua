@@ -9,6 +9,7 @@ local data = require("../CharacterData.server") --  Put all the avatar data here
 local presets = { Tag = __TUTORIAL_TAG__, AliasAttribute = __TUTORIAL_ALIAS_ATTRIBUTE__ }
 local watched = {}
 
+local FULL_APPEARANCE = false -- true reapplies the full appearance, false only applies accessories
 local FETCH_IN_FLIGHT_MAX = 16
 local FETCH_RETRY_SECONDS = 0.5
 
@@ -77,7 +78,9 @@ local function wear(record, row)
                         end
                     end
                     if not worn then
-                        local attached, accessory = pcall(character.AddAccessory, character, handle)
+                        local attached, accessory = pcall(function()
+                            return character:AddAccessory(handle)
+                        end)
                         if attached and accessory then
                             record.owned[asset] = accessory
                         else
@@ -211,7 +214,7 @@ local function reconcileTagged(current, tag)
         if not character:IsAlive() or not character:HasComponent(tag) or character.attr[presets.AliasAttribute] ~= alias then
             current[character] = nil
         elseif watched[character] ~= alias or (state and state.interrupted) then
-            local ok, reason = apply(character, alias, false, tag)
+            local ok, reason = apply(character, alias, FULL_APPEARANCE, tag)
             if not ok then warn(`[AvatarDresser]: {reason}`) end
         end
     end

@@ -1,4 +1,4 @@
 return table.freeze({
-	Tag = "Dress Up",
+	Tag = "Dresser",
 	AliasAttribute = "Alias",
 })

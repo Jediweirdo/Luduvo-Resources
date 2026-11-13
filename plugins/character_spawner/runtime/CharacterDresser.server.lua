@@ -74,7 +74,9 @@ local function wear(record, row)
 						end
 					end
 					if not worn then
-						local attached, accessory = pcall(character.AddAccessory, character, handle)
+						local attached, accessory = pcall(function()
+							return character:AddAccessory(handle)
+						end)
 						if attached and accessory then
 							record.owned[asset] = accessory
 						else
